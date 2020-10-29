@@ -1,0 +1,23 @@
+{
+  "name": "leaflet-shapefile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest --watch"
+  },
+  "keywords": [],
+  "author": "louisz",
+  "license": "ISC",
+  "dependencies": {
+    "jszip": "^3.5.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.3",
+    "@babel/preset-env": "^7.12.1",
+    "babel-jest": "^26.6.1",
+    "jest": "^26.6.1",
+    "typescript": "^4.0.3",
+    "webpack": "^5.3.0"
+  }
+}
