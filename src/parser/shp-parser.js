@@ -136,6 +136,14 @@ class PolyLineM extends PolyLine {
     }
 }
 
+class PolygonM extends Polygon {
+    constructor(bbox, parts, points, mRange, mArray) {
+        super(bbox, parts, points);
+        this.mRange = mRange;
+        this.mArray = mArray;
+    }
+}
+
 // Null Shape Record Contents
 //  Position        Field        Value      Type        Number      Byte Order
 //  Byte 0          Shape Type   0          Integer     1           Little
@@ -317,14 +325,14 @@ export function parsePolyLineMRecord(buffer) {
     let mArray = [];
     for (let index = 0; index < numOfPoints; index++) {
         mArray.push(m[1 + index]);
-    } 
+    }
 
     return new PolyLineM(bbox, parts, points, [mMin, mMax], mArray);
 }
 
 // PolygonM Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
-//  Byte 0          Shape Type      28         Integer     1           Little
+//  Byte 0          Shape Type      25         Integer     1           Little
 //  Byte 4          Box             Box        Double      4           Little
 //  Byte 36         NumParts        NumParts   Integer     1           Little
 //  Byte 40         NumPoints       NumPoints  Point       NumPoints   Little
@@ -335,7 +343,33 @@ export function parsePolyLineMRecord(buffer) {
 //  Byte Y+16*      Marray          Marray     Double      1           Little
 //  Note: X = 40 + (4 * NumParts); Y = X + (16 * NumPoints)
 //  * optional
-export function parsePolygonMRecord(record) {}
+export function parsePolygonMRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 25) throw new Error('Invalid PolygonM Record');
+
+    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
+    const numOfParts = record[9];
+    const numOfPoints = record[10];
+
+    const parts = [record[11], record[12]];
+    const pointsBuffer = new BigInt64Array(record.slice(13).buffer);
+
+    let points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    const m = new BigInt64Array(record.slice(13 + (numOfPoints << 2)).buffer);
+    const mMin = m[0];
+    const mMax = m[1];
+
+    let mArray = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        mArray.push(m[1 + index]);
+    } 
+
+    return new PolygonM(bbox, parts, points, [mMin, mMax], mArray);
+}
 
 // PointZ Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
