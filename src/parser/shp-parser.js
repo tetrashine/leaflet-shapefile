@@ -144,6 +144,21 @@ class PolygonM extends Polygon {
     }
 }
 
+class PointZ extends PointM {
+    constructor(x, y, m, z) {
+        super(x, y, m);
+        this.z = z;
+    }
+}
+
+class MultiPointZ extends MultiPointM {
+    constructor(bbox, points, mRange, mArray, zRange, zArray) {
+        super(bbox, points, mRange, mArray);
+        this.zRange = zRange;
+        this.zArray = zArray;
+    }
+}
+
 // Null Shape Record Contents
 //  Position        Field        Value      Type        Number      Byte Order
 //  Byte 0          Shape Type   0          Integer     1           Little
@@ -377,7 +392,13 @@ export function parsePolygonMRecord(buffer) {
 //  Byte 4          X               X          Double      1           Little
 //  Byte 12         Y               Y          Double      1           Little
 //  Byte 20         Measure         M          Double      1           Little
-export function parsePointZRecord(record) {}
+export function parsePointZRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 11) throw new Error('Invalid PointZ Record');
+
+    const record64 = new BigInt64Array(record.slice(1).buffer);
+    return new PointZ(record64[0], record64[1], record64[2], record64[3]);
+}
 
 // MultiPointZ Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
@@ -393,7 +414,38 @@ export function parsePointZRecord(record) {}
 //  Byte Y+16*      Marray          Marray     Double      NumPoints   Little
 //  Note: X = 40 + (16 * NumPoints); Y = X + 16 + (8 * NumPoints)
 //  * optional
-export function parseMultiPointZRecord(record) {}
+export function parseMultiPointZRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 18) throw new Error('Invalid MultiPointZ Record');
+
+    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
+    const numOfPoints = record[9];
+    const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
+
+    let points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    const record64 = new BigInt64Array(record.slice(10 + (numOfPoints << 2)).buffer);
+    const zMin = record64[0];
+    const zMax = record64[1];
+
+    let zArray = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        zArray.push(record64[2 + index]);
+    }
+
+    const mMin = record64[2 + numOfPoints];
+    const mMax = record64[3 + numOfPoints];
+
+    let mArray = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        mArray.push(record64[3 + numOfPoints + index]);
+    }
+
+    return new MultiPointZ(bbox, points, [mMin, mMax], mArray, [zMin, zMax], zArray);
+}
 
 // PolyLineZ Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
