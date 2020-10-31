@@ -1,5 +1,5 @@
 import { 
-	parsePointRecord, parseMultiPointRecord, parsePolyLineRecord
+	parsePointRecord, parseMultiPointRecord, parsePolyLineRecord, parsePolygonRecord,
 } from '../src/parser/shp-parser';
 
 test('parsePointRecord - non point record', () => {
@@ -64,4 +64,36 @@ test('parsePolyLineRecord', () => {
   	expect(polyLine.numOfPoints).toBe(12);
   	expect(polyLine.parts.length).toBe(3);
   	expect(polyLine.parts).toEqual(new Uint32Array([3, 4, 5]));
+  	expect(polyLine.points.length).toBe(12);
+});
+
+test('parsePolygonRecord - non polygon record', () => {
+	const buffer = new Uint32Array([0, 4, 0, 5, 0]);
+  	expect(() => parsePolygonRecord(buffer)).toThrow('Invalid Polygon Record');
+});
+
+test('parsePolygonRecord', () => {
+	const buffer = new Uint32Array([
+		5, 							// Shape Type
+		1, 0, 2, 0, 3, 0, 4, 0, 	// Box
+		3, 							// NumParts
+		12, 						// NumPoints
+		0, 4, 9, 					// Parts
+		1, 0, 1, 0, 2, 0, 2, 0,		// Points
+		3, 0, 3, 0, 4, 0, 4, 0,
+		5, 0, 5, 0, 6, 0, 6, 0,
+		7, 0, 7, 0, 8, 0, 8, 0,
+		9, 0, 9, 0, 10, 0, 10, 0,
+		11, 0, 11, 0, 12, 0, 12, 0,
+	]);
+
+  	const polygon = parsePolygonRecord(buffer);
+
+  	expect(polygon.bbox.length).toBe(4);
+  	expect(polygon.bbox.length).toBe(4);
+  	expect(polygon.numOfParts).toBe(3);
+  	expect(polygon.numOfPoints).toBe(12);
+  	expect(polygon.parts.length).toBe(3);
+  	expect(polygon.parts).toEqual(new Uint32Array([0, 4, 9]));
+  	expect(polygon.points.length).toBe(12);
 });
