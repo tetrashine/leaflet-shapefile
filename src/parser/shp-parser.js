@@ -101,6 +101,16 @@ class MultiPoint {
     }
 }
 
+class PolyLine {
+    constructor(bbox, numOfParts, numOfPoints, parts, points) {
+        this.bbox = bbox;
+        this.numOfParts = numOfParts;
+        this.numOfPoints = numOfPoints;
+        this.parts = parts;
+        this.points = points;
+    }
+}
+
 // Null Shape Record Contents
 //  Position        Field        Value      Type        Number      Byte Order
 //  Byte 0          Shape Type   0          Integer     1           Little
@@ -135,12 +145,12 @@ export function parseMultiPointRecord(buffer) {
     if (record[0] !== 8) throw new Error('Invalid Multi-Point Record');
 
     const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfPoints = (new Uint32Array(record.slice(9, 10).buffer))[0];
+    const numOfPoints = record[9];;
     const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
 
     let points = [];
     for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[index << 1 + 1]));
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
     }
 
     return new MultiPoint(bbox, points);
@@ -154,7 +164,24 @@ export function parseMultiPointRecord(buffer) {
 //  Byte 40         NumPoints       NumPoints  Integer     1           Little
 //  Byte 44         Parts           Parts      Integer     NumParts    Little
 //  Byte X          Points          Points     Point       NumPoints   Little
-export function parsePolyLineRecord(record) {}
+export function parsePolyLineRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 3) throw new Error('Invalid PolyLine Record');
+
+    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
+    const numOfParts = record[9];
+    const numOfPoints = record[10];
+
+    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
+    const pointsBuffer = new BigInt64Array(record.slice(11 + numOfParts).buffer);
+
+    let points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    return new PolyLine(bbox, numOfParts, numOfPoints, parts, points);
+}
 
 // Polygon Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
