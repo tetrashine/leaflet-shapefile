@@ -102,10 +102,10 @@ class MultiPoint {
 }
 
 class PolyLine {
-    constructor(bbox, numOfParts, numOfPoints, parts, points) {
+    constructor(bbox, parts, points) {
         this.bbox = bbox;
-        this.numOfParts = numOfParts;
-        this.numOfPoints = numOfPoints;
+        this.numOfParts = parts.length;
+        this.numOfPoints = points.length;
         this.parts = parts;
         this.points = points;
     }
@@ -117,6 +117,14 @@ class PointM extends Point {
     constructor(x, y, m) {
         super(x, y);
         this.m = m;
+    }
+}
+
+class MultiPointM extends MultiPoint {
+    constructor(bbox, points, mRange, mArray) {
+        super(bbox, points);
+        this.mRange = mRange;
+        this.mArray = mArray;
     }
 }
 
@@ -189,7 +197,7 @@ export function parsePolyLineRecord(buffer) {
         points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
     }
 
-    return new PolyLine(bbox, numOfParts, numOfPoints, parts, points);
+    return new PolyLine(bbox, parts, points);
 }
 
 // Polygon Record Contents
@@ -216,7 +224,7 @@ export function parsePolygonRecord(buffer) {
         points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
     }
 
-    return new Polygon(bbox, numOfParts, numOfPoints, parts, points);
+    return new Polygon(bbox, parts, points);
 }
 
 // PointM Record Contents
@@ -242,7 +250,30 @@ export function parsePointMRecord(buffer) {
 //  Byte X*         Mmin            Mmin       Double      1           Little
 //  Byte X+8*       Mmax            Mmax       Double      1           Little
 //  Byte X+16*      Narray          Marray     Double      NumPoints   Little
-export function parseMultiPointMRecord(record) {}
+export function parseMultiPointMRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 21) throw new Error('Invalid MultiPointM Record');
+
+    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
+    const numOfPoints = record[9];
+    const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
+
+    let points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    const m = new BigInt64Array(record.slice(10 + (numOfPoints << 2)).buffer);
+    const mMin = m[0];
+    const mMax = m[1];
+
+    let mArray = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        mArray.push(m[1 + index]);
+    }    
+
+    return new MultiPointM(bbox, points, [mMin, mMax], mArray);
+}
 
 // PolyLineM Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
