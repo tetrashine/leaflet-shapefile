@@ -167,6 +167,16 @@ class PolyLineZ extends PolyLineM {
     }
 }
 
+class PolygonZ extends PolygonM {
+    constructor(bbox, parts, points, mRange, mArray, zRange, zArray) {
+        super(bbox, parts, points, mRange, mArray);
+        this.zRange = zRange;
+        this.zArray = zArray;
+    }
+}
+
+class MultiPatch extends PolygonZ {}
+
 // Null Shape Record Contents
 //  Position        Field        Value      Type        Number      Byte Order
 //  Byte 0          Shape Type   0          Integer     1           Little
@@ -190,6 +200,49 @@ export function parsePointRecord(buffer) {
     return new Point(record64[0], record64[1]);
 }
 
+function extractBbox(buffer) {
+    return new BigInt64Array(buffer.slice(0, 8).buffer);
+}
+
+function extractPoints(buffer) {
+    const numOfPoints = buffer[0];
+    const pointsBuffer = new BigInt64Array(buffer.slice(1).buffer);
+
+    const points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    return points;
+}
+
+function extractPartsPoints(buffer) {
+    const numOfParts = buffer[0];
+    const numOfPoints = buffer[1];
+    const parts = new Uint32Array(buffer.slice(2, 2 + numOfParts).buffer);
+
+    const pointsBuffer = new BigInt64Array(buffer.slice(2 + numOfParts).buffer);
+    const points = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
+    }
+
+    return [parts, points];
+}
+
+function extractRangeValues(buffer, numOfPoints) {
+    const buf = new BigInt64Array(buffer);
+    const min = buf[0];
+    const max = buf[1];
+
+    let array = [];
+    for (let index = 0; index < numOfPoints; index++) {
+        array.push(buf[2 + index]);
+    }
+
+    return [[min, max], array];
+}
+
 // MultiPoint Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
 //  Byte 0          Shape Type      8          Integer     1           Little
@@ -200,14 +253,8 @@ export function parseMultiPointRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 8) throw new Error('Invalid Multi-Point Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfPoints = record[9];;
-    const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
+    const bbox = extractBbox(record.slice(1));
+    const points = extractPoints(record.slice(9));
 
     return new MultiPoint(bbox, points);
 }
@@ -224,17 +271,8 @@ export function parsePolyLineRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 3) throw new Error('Invalid PolyLine Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfParts = record[9];
-    const numOfPoints = record[10];
-
-    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
-    const pointsBuffer = new BigInt64Array(record.slice(11 + numOfParts).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
 
     return new PolyLine(bbox, parts, points);
 }
@@ -251,17 +289,8 @@ export function parsePolygonRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 5) throw new Error('Invalid Polygon Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfParts = record[9];
-    const numOfPoints = record[10];
-
-    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
-    const pointsBuffer = new BigInt64Array(record.slice(11 + numOfParts).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
 
     return new Polygon(bbox, parts, points);
 }
@@ -293,25 +322,12 @@ export function parseMultiPointMRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 21) throw new Error('Invalid MultiPointM Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfPoints = record[9];
-    const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
+    const bbox = extractBbox(record.slice(1));
+    const points = extractPoints(record.slice(9));
+    const numOfPoints = points.length;
+    const [mRange, mArray] = extractRangeValues(record.slice(10 + (numOfPoints << 2)).buffer, numOfPoints);
 
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
-
-    const m = new BigInt64Array(record.slice(10 + (numOfPoints << 2)).buffer);
-    const mMin = m[0];
-    const mMax = m[1];
-
-    let mArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        mArray.push(m[1 + index]);
-    }    
-
-    return new MultiPointM(bbox, points, [mMin, mMax], mArray);
+    return new MultiPointM(bbox, points, mRange, mArray);
 }
 
 // PolyLineM Record Contents
@@ -329,28 +345,13 @@ export function parsePolyLineMRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 28) throw new Error('Invalid PolyLineM Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfParts = record[9];
-    const numOfPoints = record[10];
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
+    const numOfParts = parts.length;
+    const numOfPoints = points.length;
+    const [mRange, mArray] = extractRangeValues(record.slice(13 + (numOfPoints << 2)).buffer, numOfPoints);
 
-    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
-    const pointsBuffer = new BigInt64Array(record.slice(13).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
-
-    const m = new BigInt64Array(record.slice(13 + (numOfPoints << 2)).buffer);
-    const mMin = m[0];
-    const mMax = m[1];
-
-    let mArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        mArray.push(m[1 + index]);
-    }
-
-    return new PolyLineM(bbox, parts, points, [mMin, mMax], mArray);
+    return new PolyLineM(bbox, parts, points, mRange, mArray);
 }
 
 // PolygonM Record Contents
@@ -370,28 +371,13 @@ export function parsePolygonMRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 25) throw new Error('Invalid PolygonM Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfParts = record[9];
-    const numOfPoints = record[10];
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
+    const numOfParts = parts.length;
+    const numOfPoints = points.length;
+    const [mRange, mArray] = extractRangeValues(record.slice(13 + (numOfPoints << 2)).buffer, numOfPoints);
 
-    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
-    const pointsBuffer = new BigInt64Array(record.slice(13).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
-
-    const m = new BigInt64Array(record.slice(13 + (numOfPoints << 2)).buffer);
-    const mMin = m[0];
-    const mMax = m[1];
-
-    let mArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        mArray.push(m[1 + index]);
-    } 
-
-    return new PolygonM(bbox, parts, points, [mMin, mMax], mArray);
+    return new PolygonM(bbox, parts, points, mRange, mArray);
 }
 
 // PointZ Record Contents
@@ -426,33 +412,15 @@ export function parseMultiPointZRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 18) throw new Error('Invalid MultiPointZ Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfPoints = record[9];
-    const pointsBuffer = new BigInt64Array(record.slice(10).buffer);
-
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
+    const bbox = extractBbox(record.slice(1));
+    const points = extractPoints(record.slice(9));
+    const numOfPoints = points.length;
 
     const record64 = new BigInt64Array(record.slice(10 + (numOfPoints << 2)).buffer);
-    const zMin = record64[0];
-    const zMax = record64[1];
+    const [zRange, zArray] = extractRangeValues(record64, numOfPoints)
+    const [mRange, mArray] = extractRangeValues(record64.slice(2 + numOfPoints).buffer, numOfPoints);
 
-    let zArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        zArray.push(record64[2 + index]);
-    }
-
-    const mMin = record64[2 + numOfPoints];
-    const mMax = record64[3 + numOfPoints];
-
-    let mArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        mArray.push(record64[3 + numOfPoints + index]);
-    }
-
-    return new MultiPointZ(bbox, points, [mMin, mMax], mArray, [zMin, zMax], zArray);
+    return new MultiPointZ(bbox, points, mRange, mArray, zRange, zArray);
 }
 
 // PolyLineZ Record Contents
@@ -475,42 +443,21 @@ export function parsePolyLineZRecord(buffer) {
     const record = new Uint32Array(buffer);
     if (record[0] !== 13) throw new Error('Invalid PolyLineZ Record');
 
-    const bbox = new BigInt64Array(record.slice(1, 9).buffer);
-    const numOfParts = record[9];
-    const numOfPoints = record[10];
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
+    const numOfParts = parts.length;
+    const numOfPoints = points.length;
 
-    const parts = new Uint32Array(record.slice(11, 11 + numOfParts).buffer);
-    const pointsBuffer = new BigInt64Array(record.slice(11 + numOfParts).buffer);
+    const record64 = new BigInt64Array(record.slice(11 + numOfParts + (numOfPoints << 2)).buffer);
+    const [zRange, zArray] = extractRangeValues(record64, numOfPoints)
+    const [mRange, mArray] = extractRangeValues(record64.slice(2 + numOfPoints).buffer, numOfPoints);
 
-    let points = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        points.push(new Point(pointsBuffer[index << 1], pointsBuffer[(index << 1) + 1]));
-    }
-
-    const record64 = new BigInt64Array(pointsBuffer.slice((numOfPoints << 1)).buffer);
-    const zMin = record64[0];
-    const zMax = record64[1];
-
-    let zArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        zArray.push(record64[2 + index]);
-    }
-
-    const mMin = record64[2 + numOfPoints];
-    const mMax = record64[3 + numOfPoints];
-
-
-    let mArray = [];
-    for (let index = 0; index < numOfPoints; index++) {
-        mArray.push(record64[4 + numOfPoints + index]);
-    }
-
-    return new PolyLineZ(bbox, parts, points, [mMin, mMax], mArray, [zMin, zMax], zArray);
+    return new PolyLineZ(bbox, parts, points, mRange, mArray, zRange, zArray);
 }
 
 // PolygonZ Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
-//  Byte 0          Shape Type      18         Integer     1           Little
+//  Byte 0          Shape Type      15         Integer     1           Little
 //  Byte 4          Box             Box        Double      4           Little
 //  Byte 36         NumParts        NumParts   Integer     1           Little
 //  Byte 40         NumPoints       NumPoints  Integer     1           Little
@@ -524,11 +471,25 @@ export function parsePolyLineZRecord(buffer) {
 //  Byte Z+16*      Marray          Marray     Double      NumPoints   Little
 //  Note: X = 40 + (16 * NumPoints); Y = X + 16 + (8 * NumPoints)
 //  * optional
-export function parsePolygonZRecord(buffer) {}
+export function parsePolygonZRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 15) throw new Error('Invalid PolygonZ Record');
+
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
+    const numOfParts = parts.length;
+    const numOfPoints = points.length;
+
+    const record64 = new BigInt64Array(record.slice(11 + numOfParts + (numOfPoints << 2)).buffer);
+    const [zRange, zArray] = extractRangeValues(record64, numOfPoints);
+    const [mRange, mArray] = extractRangeValues(record64.slice(2 + numOfPoints).buffer, numOfPoints);
+
+    return new PolygonZ(bbox, parts, points, mRange, mArray, zRange, zArray);
+}
 
 // MultiPatch Record Contents
 //  Position        Field           Value      Type        Number      Byte Order
-//  Byte 0          Shape Type      15         Integer     1           Little
+//  Byte 0          Shape Type      31         Integer     1           Little
 //  Byte 4          Box             Box        Double      4           Little
 //  Byte 36         NumParts        NumParts   Integer     1           Little
 //  Byte 40         NumPoints       NumPoints  Integer     1           Little
@@ -544,7 +505,21 @@ export function parsePolygonZRecord(buffer) {}
 //  Note: W = 44 + (4*NumParts), X = W + (4 * NumParts), 
 //  Y = X + (16 * NumPoints), Z = Y + 16 + (8 * NumPoints)
 //  * optional
-export function parseMultiPatchRecord(buffer) {}
+export function parseMultiPatchRecord(buffer) {
+    const record = new Uint32Array(buffer);
+    if (record[0] !== 31) throw new Error('Invalid MultiPatch Record');
+
+    const bbox = extractBbox(record.slice(1));
+    const [parts, points] = extractPartsPoints(record.slice(9));
+    const numOfParts = parts.length;
+    const numOfPoints = points.length;
+
+    const record64 = new BigInt64Array(record.slice(11 + numOfParts + (numOfPoints << 2)).buffer);
+    const [zRange, zArray] = extractRangeValues(record64, numOfPoints);
+    const [mRange, mArray] = extractRangeValues(record64.slice(2 + numOfPoints).buffer, numOfPoints);
+
+    return new MultiPatch(bbox, parts, points, mRange, mArray, zRange, zArray);
+}
 
 // Description of Index Records
 //  Position        Field           Value           Type      Byte Order

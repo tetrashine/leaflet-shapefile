@@ -1,7 +1,8 @@
 import { 
 	parsePointRecord, parseMultiPointRecord, parsePolyLineRecord, parsePolygonRecord,
 	parsePointMRecord, parseMultiPointMRecord, parsePolyLineMRecord, parsePolygonMRecord,
-	parsePointZRecord, parseMultiPointZRecord, parsePolyLineZRecord,
+	parsePointZRecord, parseMultiPointZRecord, parsePolyLineZRecord, parsePolygonZRecord,
+	parseMultiPatchRecord,
 } from '../src/parser/shp-parser';
 
 test('parsePointRecord - non point record', () => {
@@ -26,6 +27,7 @@ test('parseMultiPointRecord', () => {
 	const buffer = new Uint32Array([8, 1, 0, 2, 0, 3, 0, 4, 0, 5, 1, 0, 1, 0, 2, 0, 2, 0, 3, 0, 3, 0, 4, 0, 4, 0, 5, 0, 5, 0]);
 	const multiPoint = parseMultiPointRecord(buffer);
 
+	expect(multiPoint.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
 	expect(multiPoint.numOfPoints).toBe(5);
 	expect(multiPoint.points[0].x).toBe(1n);
 	expect(multiPoint.points[0].y).toBe(1n);
@@ -293,4 +295,78 @@ test('parsePolyLineZRecord', () => {
   	expect(polyLineZ.points.length).toBe(8);
   	expect(polyLineZ.zArray.length).toBe(8);
   	expect(polyLineZ.mArray.length).toBe(8);
+});
+
+test('parsePolygonZRecord - non polygonz record', () => {
+	const buffer = new Uint32Array([0, 4, 0, 5, 0]);
+  	expect(() => parsePolygonZRecord(buffer)).toThrow('Invalid PolygonZ Record');
+});
+
+test('parsePolygonZRecord', () => {
+	const buffer = new Uint32Array([
+		15, 						// Shape Type
+		1, 0, 2, 0, 3, 0, 4, 0, 	// Box
+		3, 							// NumParts
+		8, 							// NumPoints
+		0, 2, 4,					// Parts
+		1, 0, 1, 0, 2, 0, 2, 0,		// Points
+		3, 0, 3, 0, 4, 0, 4, 0,
+		5, 0, 5, 0, 6, 0, 6, 0,
+		7, 0, 7, 0, 8, 0, 8, 0,
+		1, 0, 7, 0,					// Z Range
+		1, 0, 1, 0, 2, 0, 2, 0,		// Z Array
+		5, 0, 5, 0, 7, 0, 7, 0,
+		1, 0, 						// M Min
+		5, 0,						// M Max
+		1, 0, 1, 0, 2, 0, 2, 0,		// M Array
+		3, 0, 3, 0, 4, 0, 5, 0,
+	]);
+
+  	const polygonZ = parsePolygonZRecord(buffer);
+  	expect(polygonZ.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
+  	expect(polygonZ.numOfParts).toBe(3);
+  	expect(polygonZ.parts).toEqual(new Uint32Array([0, 2, 4]));
+  	expect(polygonZ.numOfPoints).toBe(8);
+  	expect(polygonZ.zRange).toEqual([1n, 7n]);
+  	expect(polygonZ.mRange).toEqual([1n, 5n]);
+  	expect(polygonZ.points.length).toBe(8);
+  	expect(polygonZ.zArray.length).toBe(8);
+  	expect(polygonZ.mArray.length).toBe(8);
+});
+
+test('parseMultiPatchRecord - non multipatch record', () => {
+	const buffer = new Uint32Array([0, 4, 0, 5, 0]);
+  	expect(() => parseMultiPatchRecord(buffer)).toThrow('Invalid MultiPatch Record');
+});
+
+test('parseMultiPatchRecord', () => {
+	const buffer = new Uint32Array([
+		31, 						// Shape Type
+		1, 0, 2, 0, 3, 0, 4, 0, 	// Box
+		3, 							// NumParts
+		8, 							// NumPoints
+		0, 2, 4,					// Parts
+		1, 0, 1, 0, 2, 0, 2, 0,		// Points
+		3, 0, 3, 0, 4, 0, 4, 0,
+		5, 0, 5, 0, 6, 0, 6, 0,
+		7, 0, 7, 0, 8, 0, 8, 0,
+		1, 0, 7, 0,					// Z Range
+		1, 0, 1, 0, 2, 0, 2, 0,		// Z Array
+		5, 0, 5, 0, 7, 0, 7, 0,
+		1, 0, 						// M Min
+		5, 0,						// M Max
+		1, 0, 1, 0, 2, 0, 2, 0,		// M Array
+		3, 0, 3, 0, 4, 0, 5, 0,
+	]);
+
+  	const multiPatch = parseMultiPatchRecord(buffer);
+  	expect(multiPatch.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
+  	expect(multiPatch.numOfParts).toBe(3);
+  	expect(multiPatch.parts).toEqual(new Uint32Array([0, 2, 4]));
+  	expect(multiPatch.numOfPoints).toBe(8);
+  	expect(multiPatch.zRange).toEqual([1n, 7n]);
+  	expect(multiPatch.mRange).toEqual([1n, 5n]);
+  	expect(multiPatch.points.length).toBe(8);
+  	expect(multiPatch.zArray.length).toBe(8);
+  	expect(multiPatch.mArray.length).toBe(8);
 });
