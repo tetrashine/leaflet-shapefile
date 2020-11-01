@@ -1,7 +1,7 @@
 import { 
 	parsePointRecord, parseMultiPointRecord, parsePolyLineRecord, parsePolygonRecord,
 	parsePointMRecord, parseMultiPointMRecord, parsePolyLineMRecord, parsePolygonMRecord,
-	parsePointZRecord, parseMultiPointZRecord,
+	parsePointZRecord, parseMultiPointZRecord, parsePolyLineZRecord,
 } from '../src/parser/shp-parser';
 
 test('parsePointRecord - non point record', () => {
@@ -169,7 +169,7 @@ test('parsePolyLineMRecord', () => {
   	const polyLineM = parsePolyLineMRecord(buffer);
   	expect(polyLineM.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
   	expect(polyLineM.numOfParts).toBe(2);
-  	expect(polyLineM.parts).toEqual([0, 4]);
+  	expect(polyLineM.parts).toEqual(new Uint32Array([0, 4]));
   	expect(polyLineM.numOfPoints).toBe(8);
   	expect(polyLineM.mRange).toEqual([1n, 5n]);
   	expect(polyLineM.points.length).toBe(8);
@@ -200,7 +200,7 @@ test('parsePolygonMRecord', () => {
   	const polygonM = parsePolygonMRecord(buffer);
   	expect(polygonM.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
   	expect(polygonM.numOfParts).toBe(2);
-  	expect(polygonM.parts).toEqual([0, 4]);
+  	expect(polygonM.parts).toEqual(new Uint32Array([0, 4]));
   	expect(polygonM.numOfPoints).toBe(8);
   	expect(polygonM.mRange).toEqual([1n, 5n]);
   	expect(polygonM.points.length).toBe(8);
@@ -256,4 +256,41 @@ test('parseMultiPointZRecord', () => {
   	expect(multiPointZ.points.length).toBe(8);
   	expect(multiPointZ.zArray.length).toBe(8);
   	expect(multiPointZ.mArray.length).toBe(8);
+});
+
+test('parsePolyLineZRecord - non polylinez record', () => {
+	const buffer = new Uint32Array([0, 4, 0, 5, 0]);
+  	expect(() => parsePolyLineZRecord(buffer)).toThrow('Invalid PolyLineZ Record');
+});
+
+test('parsePolyLineZRecord', () => {
+	const buffer = new Uint32Array([
+		13, 						// Shape Type
+		1, 0, 2, 0, 3, 0, 4, 0, 	// Box
+		3, 							// NumParts
+		8, 							// NumPoints
+		0, 2, 4,					// Parts
+		1, 0, 1, 0, 2, 0, 2, 0,		// Points
+		3, 0, 3, 0, 4, 0, 4, 0,
+		5, 0, 5, 0, 6, 0, 6, 0,
+		7, 0, 7, 0, 8, 0, 8, 0,
+		1, 0, 7, 0,					// Z Range
+		1, 0, 1, 0, 2, 0, 2, 0,		// Z Array
+		5, 0, 5, 0, 7, 0, 7, 0,
+		1, 0, 						// M Min
+		5, 0,						// M Max
+		1, 0, 1, 0, 2, 0, 2, 0,		// M Array
+		3, 0, 3, 0, 4, 0, 5, 0,
+	]);
+
+  	const polyLineZ = parsePolyLineZRecord(buffer);
+  	expect(polyLineZ.bbox).toEqual(new BigInt64Array([1n, 2n, 3n, 4n]));
+  	expect(polyLineZ.numOfParts).toBe(3);
+  	expect(polyLineZ.parts).toEqual(new Uint32Array([0, 2, 4]));
+  	expect(polyLineZ.numOfPoints).toBe(8);
+  	expect(polyLineZ.zRange).toEqual([1n, 7n]);
+  	expect(polyLineZ.mRange).toEqual([1n, 5n]);
+  	expect(polyLineZ.points.length).toBe(8);
+  	expect(polyLineZ.zArray.length).toBe(8);
+  	expect(polyLineZ.mArray.length).toBe(8);
 });
