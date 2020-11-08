@@ -84,12 +84,33 @@ export function validShapeType(type) {
         || (type == 31);
 }
 
+function toGeometry(type, coordinates) {
+    return {
+        "type": type,
+        "coordinates": coordinates,
+    };
+}
+
+function latLng(x, y) { return [x, y]; }
+
+function lngLat(x, y) { return [y, x]; }
+
 class Null {}
 
-class Point {
+export class Point {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+    }
+
+    toArray(latFirst=true) {
+        const func = latFirst ? latLng : lngLat;
+        return func(this.x, this.y);
+    }
+
+    toGeometry(latFirst=true) {
+        const func = latFirst ? latLng : lngLat;
+        return toGeometry("Point", func(this.x, this.y));
     }
 }
 
@@ -98,6 +119,13 @@ class MultiPoint {
         this.bbox = bbox;
         this.numOfPoints = points.length;
         this.points = points;
+    }
+
+    toGeometry(latFirst=true) {
+        return toGeometry(
+            "MultiPoint", 
+            this.points.map(pt => pt.toArray(latFirst)),
+        );
     }
 }
 
@@ -109,9 +137,32 @@ class PolyLine {
         this.parts = parts;
         this.points = points;
     }
+
+    toGeometry(latFirst=true) {
+        return toGeometry(
+            "LineString", 
+            this.points.map(pt => pt.toArray(latFirst)),
+        );
+    }
 }
 
-class Polygon extends PolyLine {}
+export class Polygon extends PolyLine {
+    toGeometry(latFirst=true) {
+        const arr = new Array(this.numOfParts);
+
+        if (this.numOfParts > 0) {
+            for (let index = 0; index < this.numOfParts; index++) {
+                arr[index] = this.points
+                    .slice(this.parts[index], this.parts[index + 1])
+                    .map(pt => pt.toArray(latFirst));
+            }
+        } else {
+            arr.push(this.points.map(pt => pt.toArray(latFirst)));
+        }
+        
+        return toGeometry("Polygon", arr);
+    }
+}
 
 class PointM extends Point {
     constructor(x, y, m) {
