@@ -4,20 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "rollup -c -g path-source -f umd -- src/parser/shp-parser.js",
     "test": "jest --watch"
   },
   "keywords": [],
   "author": "louisz",
   "license": "ISC",
   "dependencies": {
-    "jszip": "^3.5.0"
+    "path-source": "^0.1.3"
   },
   "devDependencies": {
     "@babel/core": "^7.12.3",
     "@babel/preset-env": "^7.12.1",
     "babel-jest": "^26.6.1",
     "jest": "^26.6.1",
-    "typescript": "^4.0.3",
-    "webpack": "^5.3.0"
+    "rollup": "^2.33.1",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "typescript": "^4.0.3"
   }
 }
